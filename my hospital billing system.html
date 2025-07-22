@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hospital Billing System</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    .tabs button {
+      margin-right: 10px;
+      padding: 10px 20px;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .tabs button.active {
+      background: #0056b3;
+    }
+    .hidden {
+      display: none;
+    }
+    input, select {
+      padding: 8px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
+    button.delete {
+      background: red;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>KANUNGA TELI Hospital Billing System</h2>
+    <div class="tabs">
+      <button id="tab-register" class="active">Register Patient</button>
+      <button id="tab-services">Select Services</button>
+      <button id="tab-billing">Generate Bill</button>
+      <button id="tab-payment">Process Payment</button>
+      <button id="tab-history">Billing History</button>
+    </div>
+  </div>
+
+  <!-- Register Patient -->
+  <div id="content-register" class="card">
+    <h3>Register Patient</h3>
+    <input type="text" id="patient-name" placeholder="Patient Name" autocomplete="off" />
+    <input type="text" id="patient-phone" placeholder="Phone Number" autocomplete="off" />
+    <input type="number" id="patient-age" placeholder="Age" autocomplete="off" />
+    <select id="patient-gender" autocomplete="off">
+      <option value="">Select Gender</option>
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+    </select>
+    <button onclick="registerPatient()">Register</button>
+    <h4>Registered Patients</h4>
+    <div id="patients-list"></div>
+  </div>
+
+  <!-- Select Services -->
+  <div id="content-services" class="card hidden">
+    <h3>Select Services</h3>
+    <select id="patient-select"></select>
+    <label><input type="checkbox" value="Consultation" data-cost="50" /> Consultation (Ksh.50)</label><br/>
+    <label><input type="checkbox" value="Lab Test" data-cost="100" /> Lab Test (Ksh.100)</label><br/>
+    <label><input type="checkbox" value="X-Ray" data-cost="200" /> X-Ray (Ksh.200)</label><br/><br/>
+    <button onclick="selectServices()">Continue</button>
+  </div>
+
+  <!-- Generate Bill -->
+  <div id="content-billing" class="card hidden">
+    <h3>Generate Bill</h3>
+    <div id="bill-details"></div>
+    <button onclick="generateBill()">Generate Bill</button>
+  </div>
+
+  <!-- Process Payment -->
+  <div id="content-payment" class="card hidden">
+    <h3>Process Payment</h3>
+    <div id="payment-details"></div>
+    <input type="number" id="payment-amount" placeholder="Enter payment amount" autocomplete="off" />
+    <button onclick="processPayment()">Pay</button>
+  </div>
+
+  <!-- Billing History -->
+  <div id="content-history" class="card hidden">
+    <h3>Billing History</h3>
+    <div id="history-list"></div>
+  </div>
+
+  <script>
+    let patients = JSON.parse(localStorage.getItem('patients')) || [];
+    let bills = JSON.parse(localStorage.getItem('bills')) || [];
+    let selectedPatient = null;
+    let selectedServices = [];
+    let currentBill = null;
+
+    const tabs = ['register', 'services', 'billing', 'payment', 'history'];
+    tabs.forEach(tab => {
+      document.getElementById(`tab-${tab}`).addEventListener('click', () => showTab(tab));
+    });
+
+    function showTab(tab) {
+      tabs.forEach(t => {
+        document.getElementById(`content-${t}`).classList.add('hidden');
+        document.getElementById(`tab-${t}`).classList.remove('active');
+      });
+      document.getElementById(`content-${tab}`).classList.remove('hidden');
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      if (tab === 'services') loadPatientsSelect();
+      if (tab === 'history') loadHistory();
+      if (tab === 'register') loadPatientsList();
+    }
+
+    function registerPatient() {
+      const name = document.getElementById('patient-name').value.trim();
+      const phone = document.getElementById('patient-phone').value.trim();
+      const age = document.getElementById('patient-age').value.trim();
+      const gender = document.getElementById('patient-gender').value;
+
+      if (!name || !phone || !age || !gender) {
+        alert("Please fill all fields");
+        return;
+      }
+
+      const patient = { 
+        id: Date.now(), 
+        name, 
+        phone, 
+        age: parseInt(age), 
+        gender 
+      };
+
+      patients.push(patient);
+      localStorage.setItem('patients', JSON.stringify(patients));
+      selectedPatient = patient;
+      alert(`Patient ${name} registered`);
+
+      document.getElementById('patient-name').value = '';
+      document.getElementById('patient-phone').value = '';
+      document.getElementById('patient-age').value = '';
+      document.getElementById('patient-gender').value = '';
+
+      loadPatientsList();
+    }
+
+    function loadPatientsList() {
+      const div = document.getElementById('patients-list');
+      if (patients.length === 0) {
+        div.innerHTML = "No registered patients.";
+        return;
+      }
+      div.innerHTML = `<table>
+        <tr><th>Name</th><th>Phone</th><th>Gender</th><th>Age</th><th>Action</th></tr>
+        ${patients.map(p => `<tr>
+          <td>${p.name}</td>
+          <td>${p.phone}</td>
+          <td>${p.gender}</td>
+          <td>${p.age}</td>
+          <td><button class="delete" onclick="deletePatient(${p.id})">Delete</button></td>
+        </tr>`).join('')}
+      </table>`;
+    }
+
+    function deletePatient(id) {
+      if (confirm("Are you sure you want to delete this patient record?")) {
+        patients = patients.filter(p => p.id !== id);
+        localStorage.setItem('patients', JSON.stringify(patients));
+        loadPatientsList();
+        alert("Patient deleted successfully.");
+      }
+    }
+
+    function loadPatientsSelect() {
+      const select = document.getElementById('patient-select');
+      select.innerHTML = '';
+      patients.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = `${p.name} (${p.gender}, ${p.age}yrs, ${p.phone})`;
+        select.appendChild(option);
+      });
+      if (patients.length > 0) selectedPatient = patients[0];
+      select.addEventListener('change', () => {
+        selectedPatient = patients.find(p => p.id == select.value);
+      });
+    }
+
+    function selectServices() {
+      const checkboxes = document.querySelectorAll('#content-services input[type="checkbox"]:checked');
+      selectedServices = Array.from(checkboxes).map(cb => ({
+        name: cb.value,
+        cost: parseFloat(cb.getAttribute('data-cost')),
+        quantity: 1
+      }));
+      if (selectedServices.length === 0) {
+        alert("Select at least one service");
+        return;
+      }
+      showTab('billing');
+      renderBillDetails();
+    }
+
+    function renderBillDetails() {
+      const div = document.getElementById('bill-details');
+      div.innerHTML = `<strong>Patient:</strong> ${selectedPatient.name} (${selectedPatient.gender}, ${selectedPatient.age}yrs, ${selectedPatient.phone})<br/><strong>Services:</strong><ul>` +
+        selectedServices.map(s => `<li>${s.name} - Ksh.${s.cost}</li>`).join('') + `</ul>`;
+    }
+
+    function generateBill() {
+      const total = selectedServices.reduce((sum, s) => sum + s.cost, 0);
+      const bill = {
+        id: Date.now(),
+        patientId: selectedPatient.id,
+        patientName: selectedPatient.name,
+        patientPhone: selectedPatient.phone,
+        patientAge: selectedPatient.age,
+        patientGender: selectedPatient.gender,
+        services: selectedServices,
+        total,
+        balance: total
+      };
+      bills.push(bill);
+      localStorage.setItem('bills', JSON.stringify(bills));
+      currentBill = bill;
+      alert(`Bill generated for Ksh.${total}`);
+      showTab('payment');
+      renderPaymentDetails();
+    }
+
+    function renderPaymentDetails() {
+      const div = document.getElementById('payment-details');
+      div.innerHTML = `<strong>Patient:</strong> ${currentBill.patientName} (${currentBill.patientGender}, ${currentBill.patientAge}yrs, ${currentBill.patientPhone})<br/>
+                       <strong>Total:</strong> Ksh.${currentBill.total}<br/>
+                       <strong>Balance:</strong> Ksh.${currentBill.balance}`;
+    }
+
+    function processPayment() {
+      const amount = parseFloat(document.getElementById('payment-amount').value);
+      if (isNaN(amount) || amount <= 0) {
+        alert("Enter valid payment amount");
+        return;
+      }
+      currentBill.balance -= amount;
+      if (currentBill.balance < 0) currentBill.balance = 0;
+      bills = bills.map(b => b.id === currentBill.id ? currentBill : b);
+      localStorage.setItem('bills', JSON.stringify(bills));
+      alert(`Payment of Ksh.${amount} processed. Remaining balance: Ksh.${currentBill.balance}`);
+      renderPaymentDetails();
+      document.getElementById('payment-amount').value = '';
+    }
+
+    function loadHistory() {
+      const div = document.getElementById('history-list');
+      if (bills.length === 0) {
+        div.innerHTML = "No billing records.";
+        return;
+      }
+      div.innerHTML = `<table>
+        <tr><th>Bill ID</th><th>Patient</th><th>Phone</th><th>Gender</th><th>Age</th><th>Total</th><th>Balance</th><th>Action</th></tr>
+        ${bills.map(b => `<tr>
+          <td>${b.id}</td>
+          <td>${b.patientName}</td>
+          <td>${b.patientPhone}</td>
+          <td>${b.patientGender}</td>
+          <td>${b.patientAge}</td>
+          <td>Ksh.${b.total}</td>
+          <td>Ksh.${b.balance}</td>
+          <td><button class="delete" onclick="deleteBill(${b.id})">Delete</button></td>
+        </tr>`).join('')}
+      </table>`;
+    }
+
+    function deleteBill(id) {
+      if (confirm("Are you sure you want to delete this bill record?")) {
+        bills = bills.filter(b => b.id !== id);
+        localStorage.setItem('bills', JSON.stringify(bills));
+        loadHistory();
+        alert("Bill deleted successfully.");
+      }
+    }
+
+    // Initialize patients list when page loads
+    loadPatientsList();
+  </script>
+</body>
+</html>
